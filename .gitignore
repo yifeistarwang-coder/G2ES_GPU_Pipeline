@@ -1,0 +1,16 @@
+# Build artifacts
+obj/
+*.o
+image_pipeline
+cpu_benchmark
+
+# Generated pipeline outputs
+image/*_gray.png
+image/*_blur.png
+image/*_equalized.png
+image/*_edge.png
+image/*.pgm
+
+# Local editor and OS files
+.vscode/
+.DS_Store

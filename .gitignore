@@ -12,6 +12,12 @@ image/*_equalized.png
 image/*_edge.png
 image/*.pgm
 
+# README demo images
+!image/test_image_gray.png
+!image/test_image_blur.png
+!image/test_image_equalized.png
+!image/test_image_edge.png
+
 # Local editor and OS files
 .vscode/
 .DS_Store

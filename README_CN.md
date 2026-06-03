@@ -1,11 +1,35 @@
 # G2ES GPU 图像处理流水线
 
+[![CUDA](https://img.shields.io/badge/CUDA-11.0+-76B900?style=flat&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+[![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?style=flat&logo=opencv&logoColor=white)](https://opencv.org/)
+[![License](https://img.shields.io/badge/License-Educational-blue.svg)](#许可证)
+
 一个基于 CUDA 加速的图像处理流水线，实现了四个经典的计算机视觉处理阶段 —— **G**rayscale（灰度化）、**G**aussian blur（高斯模糊）、**E**qualization（直方图均衡化）、**S**obel edge detection（Sobel 边缘检测），并内置 CPU 参考实现用于性能对比。
 
 > 📖 English version: [README.md](README.md)
 
+## 🎨 流水线演示
+
+<table>
+  <tr>
+    <td align="center"><b>输入</b></td>
+    <td align="center"><b>灰度化</b></td>
+    <td align="center"><b>高斯模糊</b></td>
+    <td align="center"><b>直方图均衡化</b></td>
+    <td align="center"><b>Sobel 边缘检测</b></td>
+  </tr>
+  <tr>
+    <td><img src="image/test_image.png" width="150"></td>
+    <td><img src="image/test_image_gray.png" width="150"></td>
+    <td><img src="image/test_image_blur.png" width="150"></td>
+    <td><img src="image/test_image_equalized.png" width="150"></td>
+    <td><img src="image/test_image_edge.png" width="150"></td>
+  </tr>
+</table>
+
 ## 目录
 
+- [流水线演示](#流水线演示)
 - [项目概述](#项目概述)
 - [流水线阶段](#流水线阶段)
 - [项目结构](#项目结构)
@@ -14,7 +38,9 @@
 - [使用方法](#使用方法)
 - [输出文件](#输出文件)
 - [架构详解](#架构详解)
+- [错误处理](#错误处理)
 - [性能基准测试](#性能基准测试)
+- [许可证](#许可证)
 
 ## 项目概述
 
@@ -167,13 +193,13 @@ make clean
 
 ### CPU 参考实现
 
-`main.cu` 中的 CPU 流水线使用单线程嵌套循环实现了完全相同的算法，用于：
+`src/cpu_pipeline.cpp` 中的 CPU 流水线使用单线程嵌套循环实现了完全相同的算法，用于：
 - 正确性验证（将 GPU 输出与 CPU 输出进行对比）
 - 性能基准测试（衡量 GPU 加速比）
 
-### 错误处理
+## 错误处理
 
-所有 CUDA API 调用都通过 `CHECK_CUDA_ERROR` 宏进行检查，该宏在 `utils.h` 中定义。发生错误时会打印详细的错误信息（包括文件名、行号和错误码），并终止程序。
+所有 CUDA API 调用都通过 `include/utils.h` 中定义的 `CHECK_CUDA_ERROR` 宏进行检查。发生错误时会打印详细的错误信息（包括文件名、行号、CUDA 调用和错误码），并终止程序。
 
 ## 性能基准测试
 

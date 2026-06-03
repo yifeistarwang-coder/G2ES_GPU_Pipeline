@@ -29,6 +29,7 @@ A CUDA-accelerated image processing pipeline that implements four classic comput
 
 ## 📑 Table of Contents
 
+- [🎨 Pipeline Demo](#pipeline-demo)
 - [📋 Overview](#overview)
 - [🔄 Pipeline Stages](#pipeline-stages)
 - [📁 Project Structure](#project-structure)
@@ -37,7 +38,9 @@ A CUDA-accelerated image processing pipeline that implements four classic comput
 - [🚀 Usage](#usage)
 - [📤 Output Files](#output-files)
 - [🏗️ Architecture Details](#architecture-details)
+- [🧯 Error Handling](#error-handling)
 - [📊 Performance Benchmarking](#performance-benchmarking)
+- [📄 License](#license)
 
 ## 📋 Overview
 
@@ -190,9 +193,13 @@ The histogram equalization stage is split into three specialized kernels:
 
 ### CPU Reference Implementation
 
-The CPU pipeline in `main.cu` implements identical algorithms using single-threaded nested loops. It exists for:
+The CPU pipeline in `src/cpu_pipeline.cpp` implements identical algorithms using single-threaded nested loops. It exists for:
 - Correctness verification (comparing GPU output against CPU output)
 - Performance benchmarking (measuring GPU speedup)
+
+## 🧯 Error Handling
+
+All CUDA API calls are checked through the `CHECK_CUDA_ERROR` macro defined in `include/utils.h`. On failure, the helper prints detailed error information, including file name, line number, CUDA call, and error code, then terminates the program.
 
 ## 📊 Performance Benchmarking
 

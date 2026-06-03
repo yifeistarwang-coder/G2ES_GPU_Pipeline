@@ -68,9 +68,15 @@ Input Image → [1. RGB→Gray] → [2. Gaussian Blur] → [3. Histogram Eq.] �
 G2ES_GPU_Pipeline/
 ├── include/
 │   ├── kernels.h              # All __global__ kernel declarations
+│   ├── pipeline_common.h      # Pipeline common definitions and structures
 │   └── utils.h                # CUDA error-checking macro
 ├── src/
-│   ├── main.cu                # Entry point, CPU/GPU pipelines, CLI, benchmarking
+│   ├── main.cu                # Entry point, CLI parsing, benchmark orchestration
+│   ├── cpu_pipeline.cpp       # CPU pipeline implementation
+│   ├── cpu_pipeline.h         # CPU pipeline header
+│   ├── gpu_pipeline.cu        # GPU pipeline implementation
+│   ├── gpu_pipeline.h         # GPU pipeline header
+│   ├── pipeline_common.cu     # Pipeline common utilities
 │   └── kernels/
 │       ├── rgb_to_gray.cu     # RGB → Grayscale kernel
 │       ├── gaussian_blur.cu   # 5×5 Gaussian blur kernel

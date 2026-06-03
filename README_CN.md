@@ -45,9 +45,15 @@ G2ES 加载一张图像（支持 OpenCV 所有格式：PNG、JPG、BMP、PGM、P
 G2ES_GPU_Pipeline/
 ├── include/
 │   ├── kernels.h              # 所有 __global__ 核函数声明
+│   ├── pipeline_common.h      # 流水线通用定义和结构体
 │   └── utils.h                # CUDA 错误检查宏
 ├── src/
-│   ├── main.cu                # 程序入口、CPU/GPU 流水线、命令行解析、基准测试
+│   ├── main.cu                # 程序入口、命令行解析、基准测试编排
+│   ├── cpu_pipeline.cpp       # CPU 流水线实现
+│   ├── cpu_pipeline.h         # CPU 流水线头文件
+│   ├── gpu_pipeline.cu        # GPU 流水线实现
+│   ├── gpu_pipeline.h         # GPU 流水线头文件
+│   ├── pipeline_common.cu     # 流水线通用工具函数
 │   └── kernels/
 │       ├── rgb_to_gray.cu     # RGB → 灰度 核函数
 │       ├── gaussian_blur.cu   # 5×5 高斯模糊 核函数

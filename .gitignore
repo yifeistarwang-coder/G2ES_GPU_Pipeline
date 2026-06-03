@@ -5,6 +5,7 @@ image_pipeline
 cpu_benchmark
 
 # Generated pipeline outputs
+output/
 image/*_gray.png
 image/*_blur.png
 image/*_equalized.png

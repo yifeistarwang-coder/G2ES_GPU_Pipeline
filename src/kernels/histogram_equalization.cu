@@ -1,5 +1,6 @@
 #include "kernels.h"
 #include "utils.h"
+#include "pipeline_common.h"
 
 /**
  * 计算全局直方图核函数

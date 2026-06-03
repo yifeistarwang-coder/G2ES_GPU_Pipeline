@@ -1,22 +1,45 @@
 # G2ES GPU Image Processing Pipeline
 
+[![CUDA](https://img.shields.io/badge/CUDA-11.0+-76B900?style=flat&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+[![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?style=flat&logo=opencv&logoColor=white)](https://opencv.org/)
+[![License](https://img.shields.io/badge/License-Educational-blue.svg)](#license)
+
 A CUDA-accelerated image processing pipeline that implements four classic computer vision stages — **G**rayscale, **G**aussian blur, **E**qualization (histogram), **S**obel edge detection — with a built-in CPU reference implementation for benchmarking.
 
 > 📖 中文文档请查看 [README_CN.md](README_CN.md)
 
-## Table of Contents
+## 🎨 Pipeline Demo
 
-- [Overview](#overview)
-- [Pipeline Stages](#pipeline-stages)
-- [Project Structure](#project-structure)
-- [Prerequisites](#prerequisites)
-- [Build](#build)
-- [Usage](#usage)
-- [Output Files](#output-files)
-- [Architecture Details](#architecture-details)
-- [Performance Benchmarking](#performance-benchmarking)
+<table>
+  <tr>
+    <td align="center"><b>Input</b></td>
+    <td align="center"><b>Grayscale</b></td>
+    <td align="center"><b>Gaussian Blur</b></td>
+    <td align="center"><b>Histogram Eq.</b></td>
+    <td align="center"><b>Sobel Edge</b></td>
+  </tr>
+  <tr>
+    <td><img src="image/test_image.png" width="150"></td>
+    <td><img src="image/test_image_gray.png" width="150"></td>
+    <td><img src="image/test_image_blur.png" width="150"></td>
+    <td><img src="image/test_image_equalized.png" width="150"></td>
+    <td><img src="image/test_image_edge.png" width="150"></td>
+  </tr>
+</table>
 
-## Overview
+## 📑 Table of Contents
+
+- [📋 Overview](#overview)
+- [🔄 Pipeline Stages](#pipeline-stages)
+- [📁 Project Structure](#project-structure)
+- [⚙️ Prerequisites](#prerequisites)
+- [🔨 Build](#build)
+- [🚀 Usage](#usage)
+- [📤 Output Files](#output-files)
+- [🏗️ Architecture Details](#architecture-details)
+- [📊 Performance Benchmarking](#performance-benchmarking)
+
+## 📋 Overview
 
 G2ES loads an image (any format OpenCV supports: PNG, JPG, BMP, PGM, PPM, etc.), processes it through a four-stage pipeline, and writes intermediate and final results as PNG files. The project supports three execution modes:
 
@@ -26,7 +49,7 @@ G2ES loads an image (any format OpenCV supports: PNG, JPG, BMP, PGM, PPM, etc.),
 | CPU only | `--cpu` | Runs the single-threaded CPU reference pipeline |
 | Both | `--both` | Runs both pipelines and prints a speedup comparison |
 
-## Pipeline Stages
+## 🔄 Pipeline Stages
 
 ```
 Input Image → [1. RGB→Gray] → [2. Gaussian Blur] → [3. Histogram Eq.] → [4. Sobel Edge] → Output
@@ -39,7 +62,7 @@ Input Image → [1. RGB→Gray] → [2. Gaussian Blur] → [3. Histogram Eq.] �
 | 3. Histogram Equalization | CDF-based intensity redistribution | — | 3-kernel decomposition (histogram → CDF/LUT → apply) |
 | 4. Sobel Edge Detection | `min(255, √(Gx² + Gy²))` | 3×3 | Naive implementation (baseline) |
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 G2ES_GPU_Pipeline/
@@ -53,9 +76,6 @@ G2ES_GPU_Pipeline/
 │       ├── gaussian_blur.cu   # 5×5 Gaussian blur kernel
 │       ├── histogram_equalization.cu  # Histogram + CDF/LUT + LUT apply kernels
 │       └── sobel_edge.cu      # Sobel edge detection kernel
-├── testdata/
-│   ├── minimal.pgm            # 4×4 grayscale test image (Netpbm PGM)
-│   └── minimal.ppm            # 4×4 color test image (Netpbm PPM)
 ├── image/
 │   └── test_image.png         # Sample input image
 ├── Makefile                   # nvcc-based build system
@@ -63,7 +83,7 @@ G2ES_GPU_Pipeline/
 └── README_CN.md               # 中文文档
 ```
 
-## Prerequisites
+## ⚙️ Prerequisites
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
@@ -87,7 +107,7 @@ nvcc --version
 pkg-config --modversion opencv4
 ```
 
-## Build
+## 🔨 Build
 
 ```bash
 make
@@ -101,7 +121,7 @@ To clean build artifacts:
 make clean
 ```
 
-## Usage
+## 🚀 Usage
 
 ```bash
 ./image_pipeline [mode] <input_image> <output_prefix>
@@ -128,7 +148,7 @@ make clean
 | `<input_image>` | Yes | Path to input image (any OpenCV-supported format) |
 | `<output_prefix>` | Yes | Prefix for output file names |
 
-## Output Files
+## 📤 Output Files
 
 Each run produces four PNG images per mode:
 
@@ -141,7 +161,7 @@ Each run produces four PNG images per mode:
 
 In `--both` mode, files are automatically suffixed with `_cpu` or `_gpu` (e.g., `test_image_cpu_gray.png`, `test_image_gpu_gray.png`).
 
-## Architecture Details
+## 🏗️ Architecture Details
 
 ### GPU Kernel Design
 
@@ -168,7 +188,7 @@ The CPU pipeline in `main.cu` implements identical algorithms using single-threa
 - Correctness verification (comparing GPU output against CPU output)
 - Performance benchmarking (measuring GPU speedup)
 
-## Performance Benchmarking
+## 📊 Performance Benchmarking
 
 Use `--both` mode to compare GPU and CPU performance in a single run:
 
@@ -184,6 +204,6 @@ The output includes:
 
 GPU timing uses `cudaEvent` for accurate kernel measurement; CPU timing uses `std::chrono::steady_clock`.
 
-## License
+## 📄 License
 
 This project is for educational/study purposes.

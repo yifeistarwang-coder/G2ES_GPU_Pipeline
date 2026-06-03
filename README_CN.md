@@ -53,9 +53,6 @@ G2ES_GPU_Pipeline/
 │       ├── gaussian_blur.cu   # 5×5 高斯模糊 核函数
 │       ├── histogram_equalization.cu  # 直方图 + CDF/LUT + LUT应用 核函数
 │       └── sobel_edge.cu      # Sobel 边缘检测 核函数
-├── testdata/
-│   ├── minimal.pgm            # 4×4 灰度测试图（Netpbm PGM 格式）
-│   └── minimal.ppm            # 4×4 彩色测试图（Netpbm PPM 格式）
 ├── image/
 │   └── test_image.png         # 示例输入图像
 ├── Makefile                   # 基于 nvcc 的构建系统

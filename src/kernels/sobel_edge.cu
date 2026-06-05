@@ -78,6 +78,13 @@ __global__ void sobel_edge_naive_kernel(const unsigned char* input,
  * @param height 图像高度
  * @details 每个block协作加载16x16输出区域及其一圈halo到共享内存，减少相邻线程
  *          对global memory的重复读取。边界处理和朴素版本保持一致：最外圈输出0。
+ *
+ *          实验结论（sm_87 / Jetson AGX Orin / 1440x810图像）:
+ *          - 共享内存int tile版本比朴素版慢~8%：协作加载+同步的固定开销 > 3x3小核的带宽节省
+ *          - unsigned char tile比int tile更慢（~2x）：行宽18字节导致共享内存bank conflict加剧
+ *          - __ldg()比普通load更慢：sm_87上绕过L1走texture cache路径，延迟更高
+ *          - uchar4向量化：协作加载步长=block_threads时其他线程会覆盖uchar4写的后3个字节
+ *          结论：3x3 Sobel核太小，任何共享内存优化在此硬件上都没有收益，朴素版即最优。
  */
 __global__ void sobel_edge_optimized_kernel(const unsigned char* input,
                                             unsigned char* output,

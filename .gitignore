@@ -18,6 +18,10 @@ image/*.pgm
 !image/test_image_equalized.png
 !image/test_image_edge.png
 
+# Nsight Systems profiling artifacts
+nsys_profile_*.nsys-rep
+nsys_profile_*.sqlite
+
 # Local editor and OS files
 .vscode/
 .DS_Store

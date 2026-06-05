@@ -31,6 +31,7 @@ A CUDA-accelerated image processing pipeline that implements four classic comput
 
 - [🎨 Pipeline Demo](#pipeline-demo)
 - [📋 Overview](#overview)
+- [📊 Performance Overview](#performance-overview)
 - [🔄 Pipeline Stages](#pipeline-stages)
 - [📁 Project Structure](#project-structure)
 - [⚙️ Prerequisites](#prerequisites)
@@ -53,6 +54,23 @@ G2ES loads an image (any format OpenCV supports: PNG, JPG, BMP, PGM, PPM, etc.),
 | CPU only | `--cpu` | Runs the single-threaded CPU reference pipeline |
 | Both | `--both` | Runs both CPU and GPU (naive) and prints a speedup comparison |
 
+## 📊 Performance Overview
+
+> Measured on **Jetson AGX Orin** with a **1440×810** image.
+
+| Metric | CPU | GPU (Naive) | GPU Optimized<br/>(No Sobel Opt) 🏆 | GPU Optimized<br/>(All) |
+|--------|:---:|:-----------:|:----------------------------------:|:----------------------:|
+| Kernel compute | 34.29 ms | 3.31 ms | **1.66 ms** | 1.89 ms |
+| + Transfer (H2D+D2H) | — | 6.30 ms | **4.60 ms** | 4.85 ms |
+| **Speedup vs CPU** (kernel only) | 1× | **10.4×** | **20.7×** | 18.1× |
+| **Speedup vs CPU** (incl. transfer) | — | **5.4×** | **7.5×** | 7.1× |
+
+**Key takeaways:**
+
+- 🏆 **Best config** = optimized RGB + optimized Gaussian + optimized Histogram + **naive Sobel** → **20.7× kernel speedup**
+- Full optimization (1.89 ms) is **13.8% slower** than the "no Sobel opt" variant (1.66 ms)—the shared memory Sobel backfires (see [Shared Memory Optimization Insights](#shared-memory-optimization-insights))
+- Data transfers (~3 ms) remain the end-to-end bottleneck, capping the transfer-inclusive speedup at **7.5×**
+
 ## 🔄 Pipeline Stages
 
 ```
@@ -70,12 +88,14 @@ Input Image → [1. RGB→Gray] → [2. Gaussian Blur] → [3. Histogram Eq.] �
 
 The `--gpu-optimized` mode uses optimized kernel implementations that provide better performance:
 
-| Stage | Optimization Technique | Performance Impact |
-|-------|----------------------|-------------------|
-| 1. RGB to Grayscale | `uchar3` vectorized memory access | ~15% faster memory reads |
-| 2. Gaussian Blur | Shared memory + separable convolution | ~20% faster convolution |
-| 3. Histogram | Shared memory local histograms + grid-stride loop | ~10% faster atomic operations |
-| 4. Sobel Edge | Shared memory tile with halo | ~25% faster neighborhood access |
+| Stage | Optimization Technique | Measured Performance Impact |
+|-------|----------------------|----------------------------|
+| 1. RGB to Grayscale | `uchar3` vectorized memory access | **+3.2%** |
+| 2. Gaussian Blur | Shared memory + separable convolution | **+1.7%** |
+| 3. Histogram | Shared memory local histograms + grid-stride loop | **+87.8%** 🏆 |
+| 4. Sobel Edge | Shared memory tile with halo | **-96.6%** ❌ |
+
+> **Note:** The above figures are measured on a 1440×810 image on Jetson AGX Orin. Performance varies by hardware, image size, and implementation details. The Sobel regression is explained in the [Shared Memory Optimization Insights](#shared-memory-optimization-insights) section below.
 
 ## 📁 Project Structure
 
@@ -249,8 +269,10 @@ To compare the performance of naive and optimized GPU kernels:
 
 | Metric | Naive Kernels | Optimized Kernels | Improvement |
 |--------|--------------|-------------------|-------------|
-| Kernel Total | 1.37 ms | 1.21 ms | **11.5% faster** |
-| Transfer+Kernel | 3.94 ms | 3.64 ms | **7.7% faster** |
+| Kernel Total | 3.31 ms | 1.89 ms | **42.9% faster** |
+| Transfer+Kernel | 6.30 ms | 4.85 ms | **23.1% faster** |
+
+> 💡 The full **CPU vs GPU vs GPU Optimized** comparison table (including the best-performing "No Sobel Opt" variant at 20.7× speedup) is in the [Performance Overview](#-performance-overview) at the top of this document.
 
 ### Kernel-by-Kernel Benchmark
 
@@ -283,6 +305,44 @@ This runs 6 tests (3 warmup + 10 benchmark runs each):
 - Histogram optimization provides the most significant improvement (55.78%)
 - Other individual optimizations show slight overhead
 - Combined optimization achieves 48.36% improvement, mainly from histogram optimization
+
+### Shared Memory Optimization Insights
+
+Shared memory is one of the most commonly used CUDA optimization techniques. The basic idea is to cooperatively load data from global memory into shared memory (on-chip SRAM), then have threads exchange data through shared memory, reducing redundant requests for global memory bandwidth.
+
+Using the Sobel 3×3 edge detection as a case study, the optimized version (`sobel_edge_optimized_kernel`) employs a **shared memory tile with halo**:
+
+1. Each 16×16 thread block cooperatively loads an **18×18** tile (16×16 output region + 1-pixel halo on each side) into shared memory
+2. `__syncthreads()` barrier ensures all data is ready
+3. Each thread reads the 3×3 neighborhood from shared memory and computes the Sobel gradient
+
+**Why is the shared memory Sobel 96.6% slower?**
+
+| Factor | Explanation |
+|--------|-------------|
+| 🔄 **Cooperative load overhead** | Each block must load the halo region (18×18=324 elements vs 16×16=256 output), **a 26.6% increase** in load traffic |
+| ⏱ **Sync barrier** | `__syncthreads()` introduces warp-level waiting, which is significant at high occupancy |
+| 🎯 **Cache hit rate** | A 3×3 neighborhood has small stride; adjacent threads' reads already exhibit good spatial locality in L1/L2 cache. The naive version **hits L1 cache** in practice, making latency already quite low |
+| 🧮 **Kernel size** | The 3×3 kernel has extremely low arithmetic intensity (~2 FLOP/byte), leaving very little headroom for optimization gains |
+
+**When does shared memory optimization actually help?**
+
+The effectiveness of shared memory depends on the trade-off between **bandwidth savings** and **cooperative load + sync overhead**:
+
+| Dimension | Shared memory helps ✅ | Neutral ⚖️ | Shared memory hurts ❌ |
+|-----------|:---------------------:|:----------:|:--------------------:|
+| **Kernel size** | Large (7×7+) | Medium (5×5) | Small (3×3) |
+| **Access span** | Large stride | Moderate | Compact neighborhood |
+| **Cache quality** | Small / slow L1 | Average | Large / fast L1 |
+| **Example in project** | — | Gaussian Blur 5×5 | Sobel 3×3 |
+
+- **Histogram** (**+87.8%** ✅): Heavy `atomicAdd` contention on global memory — shared memory local reduction drastically reduces global atomic conflicts, yielding huge gains
+- **Gaussian Blur 5×5** (**+1.7%** ≈ neutral): The 5×5 kernel is at the break-even point — the cache already covers most redundant reads, leaving little for shared memory to improve
+- **Sobel 3×3** (**-96.6%** ❌): The kernel is too small — cooperative load + sync overhead exceeds whatever bandwidth savings the cache hasn't already delivered
+
+> **Rule of thumb:** For kernels with radius ≤ 2 (e.g., 3×3, 5×5), try the naive direct-read version first. If the L1 cache hit rate is already high, the cooperative load and synchronization overhead of shared memory may hurt performance. For radius ≥ 3 or strided access patterns, shared memory often brings clear benefits. **Always rely on measurements — performance expectations need experimental validation, not intuition.**
+
+For detailed experimental records and discussion, see the inline comments in [`sobel_edge.cu`](src/kernels/sobel_edge.cu) (lines 73-88).
 
 ## 📄 License
 

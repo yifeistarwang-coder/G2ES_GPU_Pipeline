@@ -86,6 +86,16 @@ int main(int argc, char** argv) {
             ran_gpu = true;
         }
 
+        if (options.mode == RunMode::kGpuOptimized) {
+            gpu_timing = run_gpu_optimized_pipeline(input_image, gpu_output_prefix(options));
+            ran_gpu = true;
+        }
+
+        if (options.mode == RunMode::kGpuBenchmark) {
+            run_gpu_benchmark(input_image);
+            return EXIT_SUCCESS;
+        }
+
         if (ran_cpu && ran_gpu) {
             std::cout << "\n=== CPU vs GPU Summary ===" << std::endl;
             std::cout << "CPU compute total:     " << cpu_timing.compute_total_ms

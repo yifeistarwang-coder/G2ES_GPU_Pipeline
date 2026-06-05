@@ -40,9 +40,11 @@ const int kGaussian5x5[kGaussianWidth * kGaussianWidth] = {
 
 // 运行模式枚举
 enum class RunMode {
-    kGpu,   // 仅GPU模式
-    kCpu,   // 仅CPU模式
-    kBoth   // CPU和GPU对比模式
+    kGpu,           // 仅GPU模式（naive kernels）
+    kCpu,           // 仅CPU模式
+    kBoth,          // CPU和GPU对比模式
+    kGpuOptimized,  // GPU模式（optimized kernels）
+    kGpuBenchmark   // GPU性能基准测试模式
 };
 
 // 命令行选项结构体

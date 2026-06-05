@@ -1,5 +1,5 @@
-#ifndef KERNELS_H
-#define KERNELS_H
+#ifndef KERNELS_CUH
+#define KERNELS_CUH
 
 /**
  * @brief RGB转灰度图的CUDA核函数
@@ -9,6 +9,10 @@
  * @param height 图像高度
  */
 __global__ void rgb_to_gray_kernel(unsigned char* rgb, unsigned char* gray, int width, int height);
+/*
+优化
+*/
+__global__ void rgb_to_gray_optimized_kernel(const uchar3* rgb, unsigned char* gray, int width, int height);
 
 /**
  * @brief 高斯模糊的CUDA核函数
@@ -19,6 +23,11 @@ __global__ void rgb_to_gray_kernel(unsigned char* rgb, unsigned char* gray, int 
  */
 __global__ void gaussian_blur_kernel(unsigned char* input, unsigned char* output, int width, int height);
 
+/*
+优化：共享内存 + 可分离滤波
+*/
+__global__ void gaussian_blur_optimized_kernel(unsigned char* input, unsigned char* output, int width, int height);
+
 /**
  * @brief 计算图像直方图的CUDA核函数（使用全局内存）
  * @param image 输入图像数据
@@ -28,6 +37,13 @@ __global__ void gaussian_blur_kernel(unsigned char* input, unsigned char* output
 __global__ void compute_histogram_global_kernel(const unsigned char* image,
                                                 unsigned int* histogram,
                                                 int pixels);
+
+/*
+优化：共享内存局部直方图 + grid-stride loop
+*/
+__global__ void compute_histogram_optimized_kernel(const unsigned char* image,
+                                                   unsigned int* histogram,
+                                                   int pixels);
 
 /**
  * @brief 构建直方图均衡化查找表(LUT)的CUDA核函数
@@ -62,5 +78,17 @@ __global__ void sobel_edge_naive_kernel(const unsigned char* input,
                                         unsigned char* output,
                                         int width,
                                         int height);
+
+/**
+ * @brief Sobel边缘检测的CUDA核函数（共享内存优化版）
+ * @param input 输入图像数据
+ * @param output 输出边缘检测结果
+ * @param width 图像宽度
+ * @param height 图像高度
+ */
+__global__ void sobel_edge_optimized_kernel(const unsigned char* input,
+                                            unsigned char* output,
+                                            int width,
+                                            int height);
 
 #endif

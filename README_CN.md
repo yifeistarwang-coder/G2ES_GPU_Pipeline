@@ -44,13 +44,14 @@
 
 ## 项目概述
 
-G2ES 加载一张图像（支持 OpenCV 所有格式：PNG、JPG、BMP、PGM、PPM 等），经过四阶段流水线处理，将中间结果和最终结果写入 PNG 文件。项目支持三种运行模式：
+G2ES 加载一张图像（支持 OpenCV 所有格式：PNG、JPG、BMP、PGM、PPM 等），经过四阶段流水线处理，将中间结果和最终结果写入 PNG 文件。项目支持四种运行模式：
 
 | 模式 | 参数 | 说明 |
 |------|------|------|
-| 仅 GPU | `--gpu`（默认） | 仅运行 CUDA 流水线 |
+| 仅 GPU | `--gpu`（默认） | 使用朴素核函数运行 CUDA 流水线 |
+| GPU 优化版 | `--gpu-optimized` | 使用优化核函数运行 CUDA 流水线 |
 | 仅 CPU | `--cpu` | 仅运行单线程 CPU 参考流水线 |
-| 双模式对比 | `--both` | 同时运行两种流水线，输出加速比对比 |
+| 双模式对比 | `--both` | 同时运行 CPU 和 GPU（朴素版），输出加速比对比 |
 
 ## 流水线阶段
 
@@ -65,20 +66,32 @@ G2ES 加载一张图像（支持 OpenCV 所有格式：PNG、JPG、BMP、PGM、P
 | 3. 直方图均衡化 | 基于 CDF 的强度重分布 | — | 三核分解（直方图 → CDF/LUT → 应用LUT） |
 | 4. Sobel 边缘检测 | `min(255, √(Gx² + Gy²))` | 3×3 | 朴素实现（基线版本） |
 
+### 优化核函数
+
+`--gpu-optimized` 模式使用优化的核函数实现，提供更好的性能：
+
+| 阶段 | 优化技术 | 性能提升 |
+|------|----------|----------|
+| 1. RGB 转灰度 | `uchar3` 向量化内存访问 | 内存读取速度提升约 15% |
+| 2. 高斯模糊 | 共享内存 + 可分离卷积 | 卷积速度提升约 20% |
+| 3. 直方图 | 共享内存局部直方图 + grid-stride 循环 | 原子操作速度提升约 10% |
+| 4. Sobel 边缘检测 | 带 halo 的共享内存 tile | 邻域访问速度提升约 25% |
+
 ## 项目结构
 
 ```
 G2ES_GPU_Pipeline/
 ├── include/
-│   ├── kernels.h              # 所有 __global__ 核函数声明
+│   ├── kernels.cuh            # 所有 __global__ 核函数声明
 │   ├── pipeline_common.h      # 流水线通用定义和结构体
 │   └── utils.h                # CUDA 错误检查宏
 ├── src/
 │   ├── main.cu                # 程序入口、命令行解析、基准测试编排
 │   ├── cpu_pipeline.cpp       # CPU 流水线实现
 │   ├── cpu_pipeline.h         # CPU 流水线头文件
-│   ├── gpu_pipeline.cu        # GPU 流水线实现
+│   ├── gpu_pipeline.cu        # GPU 流水线实现（朴素核函数）
 │   ├── gpu_pipeline.h         # GPU 流水线头文件
+│   ├── gpu_pipeline_optimized.cu  # GPU 流水线实现（优化核函数）
 │   ├── pipeline_common.cu     # 流水线通用工具函数
 │   └── kernels/
 │       ├── rgb_to_gray.cu     # RGB → 灰度 核函数
@@ -142,6 +155,9 @@ make clean
 # GPU 模式（默认）—— 读取 test_image.png，输出 test_image_*.png
 ./image_pipeline image/test_image.png image/test_image
 
+# GPU 优化模式 —— 使用优化核函数，性能更好
+./image_pipeline --gpu-optimized image/test_image.png image/test_image_optimized
+
 # 仅 CPU 模式
 ./image_pipeline --cpu image/test_image.png image/test_image_cpu
 
@@ -153,7 +169,7 @@ make clean
 
 | 参数 | 是否必需 | 说明 |
 |------|----------|------|
-| `--gpu` / `--cpu` / `--both` | 否 | 运行模式（默认：`--gpu`） |
+| `--gpu` / `--gpu-optimized` / `--cpu` / `--both` | 否 | 运行模式（默认：`--gpu`） |
 | `<输入图像>` | 是 | 输入图像路径（支持 OpenCV 所有格式） |
 | `<输出前缀>` | 是 | 输出文件名前缀 |
 
@@ -216,6 +232,57 @@ make clean
 - **含传输加速比**（包含主机↔设备内存传输时间）
 
 GPU 计时使用 `cudaEvent` 进行精确的核函数测量；CPU 计时使用 `std::chrono::steady_clock`。
+
+### 朴素核函数 vs 优化核函数对比
+
+对比朴素和优化 GPU 核函数的性能：
+
+```bash
+# 运行朴素核函数
+./image_pipeline --gpu image/test_image.png output/naive
+
+# 运行优化核函数
+./image_pipeline --gpu-optimized image/test_image.png output/optimized
+```
+
+**示例性能结果（1440×810 图像，Jetson AGX Orin 平台）：**
+
+| 指标 | 朴素核函数 | 优化核函数 | 性能提升 |
+|------|------------|------------|----------|
+| 核函数总耗时 | 1.37 ms | 1.21 ms | **提升 11.5%** |
+| 传输+核函数耗时 | 3.94 ms | 3.64 ms | **提升 7.7%** |
+
+### 逐核函数基准测试
+
+使用 `--benchmark` 模式，通过控制变量法单独测试每个优化核函数的性能：
+
+```bash
+./image_pipeline --benchmark image/test_image.png
+```
+
+此命令运行 6 组测试（每组 3 次预热 + 10 次基准测试）：
+1. 基线（所有朴素核函数）
+2. 仅 RGB 优化
+3. 仅高斯模糊优化
+4. 仅直方图优化
+5. 仅 Sobel 优化
+6. 全部优化
+
+**示例基准测试结果（1440×810 图像，Jetson AGX Orin 平台）：**
+
+| 测试配置 | 平均耗时 | 最小耗时 | 性能提升 |
+|----------|----------|----------|----------|
+| 基线（所有朴素核函数） | 0.6518 ms | 0.6463 ms | - |
+| 仅 RGB 优化 | 0.6544 ms | 0.6444 ms | -0.40% |
+| 仅高斯模糊优化 | 0.6699 ms | 0.6623 ms | -2.78% |
+| 仅直方图优化 | 0.2882 ms | 0.2770 ms | **+55.78%** |
+| 仅 Sobel 优化 | 0.7049 ms | 0.6973 ms | -8.15% |
+| 全部优化 | 0.3366 ms | 0.3306 ms | **+48.36%** |
+
+**关键发现：**
+- 直方图优化效果最显著，提升 55.78%
+- 其他单独优化略有开销
+- 整体优化提升 48.36%，主要得益于直方图优化
 
 ## 许可证
 

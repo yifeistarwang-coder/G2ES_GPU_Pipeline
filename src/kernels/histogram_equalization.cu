@@ -1,4 +1,4 @@
-#include "kernels.h"
+#include "kernels.cuh"
 #include "utils.h"
 #include "pipeline_common.h"
 
@@ -143,3 +143,50 @@ __global__ void apply_lut_kernel(const unsigned char* input,
     // 时间复杂度：O(1)，避免了复杂的数学运算
     output[index] = lut[input[index]];
 }
+
+
+
+//优化的kernel版本
+
+/**
+ * 计算直方图优化版核函数
+ *
+ * 优化思路：
+ * 1. 每个block先在共享内存中统计局部直方图，减少对全局histogram的原子竞争
+ * 2. 每个线程用grid-stride loop处理多个像素，提高大图上的覆盖效率
+ * 3. block完成局部统计后，再把256个bin合并到全局直方图
+ *
+ * 使用方式与naive版本一致：调用前仍然需要先把histogram清零。
+ */
+__global__ void compute_histogram_optimized_kernel(const unsigned char* image,
+                                                   unsigned int* histogram,
+                                                   int pixels) {
+    __shared__ unsigned int local_histogram[kHistogramBins];
+
+    const int thread_id = threadIdx.x;
+    const int global_thread_id = blockIdx.x * blockDim.x + thread_id;
+    const int stride = blockDim.x * gridDim.x;
+
+    // 初始化当前block的局部直方图。
+    for (int bin = thread_id; bin < kHistogramBins; bin += blockDim.x) {
+        local_histogram[bin] = 0;
+    }
+    __syncthreads();
+
+    // 在共享内存中统计本block负责的像素。
+    for (int index = global_thread_id; index < pixels; index += stride) {
+        atomicAdd(&local_histogram[image[index]], 1u);
+    }
+    __syncthreads();
+
+    // 将block局部结果合并到全局直方图。
+    for (int bin = thread_id; bin < kHistogramBins; bin += blockDim.x) {
+        const unsigned int count = local_histogram[bin];
+        if (count != 0) {
+            atomicAdd(&histogram[bin], count);
+        }
+    }
+}
+
+
+

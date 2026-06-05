@@ -5,42 +5,8 @@
 #include "kernels.cuh"
 #include "utils.h"
 
-void print_gpu_device_info() {
-    int device_id = 0;
-    CHECK_CUDA_ERROR(cudaGetDevice(&device_id));
-
-    cudaDeviceProp prop;
-    CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, device_id));
-
-    int clock_khz = 0;
-    CHECK_CUDA_ERROR(cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, device_id));
-
-    int mem_clock_khz = 0;
-    CHECK_CUDA_ERROR(cudaDeviceGetAttribute(&mem_clock_khz,
-                                           cudaDevAttrMemoryClockRate,
-                                           device_id));
-
-    int mem_bus_width = 0;
-    CHECK_CUDA_ERROR(cudaDeviceGetAttribute(&mem_bus_width,
-                                           cudaDevAttrGlobalMemoryBusWidth,
-                                           device_id));
-
-    std::cout << "=== GPU Device Info ===" << std::endl;
-    std::cout << "Device:           " << prop.name << std::endl;
-    std::cout << "Compute Cap:      " << prop.major << "." << prop.minor << std::endl;
-    std::cout << "GPU Clock:        " << clock_khz / 1000 << " MHz" << std::endl;
-    std::cout << "Memory Clock:     " << mem_clock_khz / 1000 << " MHz" << std::endl;
-    std::cout << "Memory Bus Width: " << mem_bus_width << " bits" << std::endl;
-    std::cout << "SM Count:         " << prop.multiProcessorCount << std::endl;
-    std::cout << "Global Memory:    " << prop.totalGlobalMem / (1024 * 1024) << " MB"
-              << std::endl;
-    std::cout << "Shared Mem/Block: " << prop.sharedMemPerBlock / 1024 << " KB"
-              << std::endl;
-    std::cout << "========================\n" << std::endl;
-}
-
-GpuTiming run_gpu_pipeline(const ImageData& input_image,
-                           const std::string& output_prefix) {
+GpuTiming run_gpu_optimized_pipeline(const ImageData& input_image,
+                                     const std::string& output_prefix) {
     unsigned char* d_rgb = nullptr;
     unsigned char* d_gray = nullptr;
     unsigned char* d_blur = nullptr;
@@ -70,7 +36,7 @@ GpuTiming run_gpu_pipeline(const ImageData& input_image,
 
     try {
         print_gpu_device_info();
-        std::cout << "Starting G2ES GPU Image Pipeline..." << std::endl;
+        std::cout << "Starting G2ES GPU Image Pipeline (Optimized Kernels)..." << std::endl;
 
         const int width = input_image.width;
         const int height = input_image.height;
@@ -116,15 +82,19 @@ GpuTiming run_gpu_pipeline(const ImageData& input_image,
         CHECK_CUDA_ERROR(cudaEventRecord(start_kernel));
 
         if (input_image.channels == 3) {
-            rgb_to_gray_kernel<<<grid, block>>>(d_rgb, d_gray, width, height);
+            // Optimized: 使用uchar3优化内存访问
+            rgb_to_gray_optimized_kernel<<<grid, block>>>(
+                reinterpret_cast<const uchar3*>(d_rgb), d_gray, width, height);
             CHECK_CUDA_ERROR(cudaGetLastError());
         }
 
-        gaussian_blur_kernel<<<grid, block>>>(d_gray, d_blur, width, height);
+        // Optimized: 共享内存 + 可分离滤波
+        gaussian_blur_optimized_kernel<<<grid, block>>>(d_gray, d_blur, width, height);
         CHECK_CUDA_ERROR(cudaGetLastError());
 
         CHECK_CUDA_ERROR(cudaMemset(d_histogram, 0, kHistogramBins * sizeof(unsigned int)));
-        compute_histogram_global_kernel<<<linear_blocks, threads>>>(d_blur, d_histogram, pixels);
+        // Optimized: 共享内存局部直方图 + grid-stride loop
+        compute_histogram_optimized_kernel<<<linear_blocks, threads>>>(d_blur, d_histogram, pixels);
         CHECK_CUDA_ERROR(cudaGetLastError());
 
         build_equalization_lut_kernel<<<1, kHistogramBins>>>(d_histogram, d_lut, pixels);
@@ -133,7 +103,8 @@ GpuTiming run_gpu_pipeline(const ImageData& input_image,
         apply_lut_kernel<<<linear_blocks, threads>>>(d_blur, d_equalized, d_lut, pixels);
         CHECK_CUDA_ERROR(cudaGetLastError());
 
-        sobel_edge_naive_kernel<<<grid, block>>>(d_equalized, d_edge, width, height);
+        // Optimized: 共享内存优化版
+        sobel_edge_optimized_kernel<<<grid, block>>>(d_equalized, d_edge, width, height);
         CHECK_CUDA_ERROR(cudaGetLastError());
 
         CHECK_CUDA_ERROR(cudaEventRecord(stop_kernel));
@@ -154,7 +125,7 @@ GpuTiming run_gpu_pipeline(const ImageData& input_image,
 
         const double write_ms = write_pipeline_outputs(output_prefix, outputs, width, height);
 
-        std::cout << "\n=== GPU Timing Results ===" << std::endl;
+        std::cout << "\n=== GPU Timing Results (Optimized Kernels) ===" << std::endl;
         std::cout << "GPU kernel total:      " << kernel_time_ms << " ms" << std::endl;
         std::cout << "GPU transfer+kernel:   " << e2e_time_ms << " ms" << std::endl;
         std::cout << "GPU write outputs:     " << write_ms << " ms" << std::endl;

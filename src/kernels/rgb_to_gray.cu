@@ -3,7 +3,7 @@
  * @brief 使用CUDA实现RGB转灰度图
  */
 
-#include "kernels.h"
+#include "kernels.cuh"
 #include "utils.h"
 
 /**
@@ -44,4 +44,21 @@ __global__ void rgb_to_gray_kernel(unsigned char* rgb,
 
     // 将计算结果存储到灰度图数组中
     gray[pixel_index] = static_cast<unsigned char>(gray_value);
+}
+
+__global__ void rgb_to_gray_optimized_kernel(const uchar3* rgb,
+                                    unsigned char* gray,
+                                    int width,
+                                    int height){
+    
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if(x >= width || y >= height) {
+        return;
+    }
+    const int pixel_index = y * width + x;  // 灰度图像素索引（1字节/像素）
+    const uchar3 pixel = rgb[pixel_index];  // 直接读取RGB像素数据
+
+    gray[pixel_index] = static_cast<unsigned char>(77 * pixel.x + 150 * pixel.y + 29 * pixel.z >> 8);
 }

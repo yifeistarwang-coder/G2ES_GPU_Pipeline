@@ -2,10 +2,16 @@
 
 void print_usage(const char* program_name) {
     std::cerr << "Usage: " << program_name
-              << " [--gpu|--cpu|--both] [input_image] [output_prefix]" << std::endl;
+              << " [--gpu|--gpu-optimized|--cpu|--both|--benchmark] [input_image] [output_prefix]" << std::endl;
     std::cerr << "Default mode:  --gpu" << std::endl;
     std::cerr << "Default input:  " << kDefaultInputPath << std::endl;
     std::cerr << "Default output: output/" << std::endl;
+    std::cerr << "\nModes:" << std::endl;
+    std::cerr << "  --gpu            GPU pipeline with naive kernels" << std::endl;
+    std::cerr << "  --gpu-optimized  GPU pipeline with optimized kernels" << std::endl;
+    std::cerr << "  --cpu            CPU pipeline only" << std::endl;
+    std::cerr << "  --both           Run both CPU and GPU for comparison" << std::endl;
+    std::cerr << "  --benchmark      Run GPU kernel performance benchmark" << std::endl;
 }
 
 bool parse_mode_flag(const std::string& value, RunMode* mode) {
@@ -19,6 +25,14 @@ bool parse_mode_flag(const std::string& value, RunMode* mode) {
     }
     if (value == "--both") {
         *mode = RunMode::kBoth;
+        return true;
+    }
+    if (value == "--gpu-optimized") {
+        *mode = RunMode::kGpuOptimized;
+        return true;
+    }
+    if (value == "--benchmark") {
+        *mode = RunMode::kGpuBenchmark;
         return true;
     }
     return false;
